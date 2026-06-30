@@ -5,7 +5,7 @@ import './App.css';
 function App() {
   return (
     <div style={appStyle}>
-      <h1 style={{ marginBottom: '2rem', color: '#fff' }}>FocusFlow</h1>
+      <h1 style={{ marginBottom: '2rem', color: '#fff' }}>FLOWSTATE</h1>
       <TimerDisplay />
     </div>
   );
