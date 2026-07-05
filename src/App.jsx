@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-const MODES = { work: 25 * 60, shortBreak: 5 * 60, longBreak: 15 * 60 };
+const DEFAULT_MODES = { work: 25, shortBreak: 5, longBreak: 15 };
 const CYCLE = ['work', 'shortBreak', 'longBreak'];
 const LABELS = { work: 'Work Session', shortBreak: 'Short Break', longBreak: 'Long Break' };
 
@@ -12,34 +12,41 @@ const parseMD = (str) => ({
 });
 
 export default function App() {
+  const [modes, setModes] = useState(() => {
+    const saved = localStorage.getItem('modes');
+    return saved ? JSON.parse(saved) : DEFAULT_MODES;
+  });
   const [mode, setMode] = useState('work');
-  const [time, setTime] = useState(MODES.work);
+  const [time, setTime] = useState(modes.work * 60);
   const [running, setRunning] = useState(false);
   const endRef = useRef(null);
+  
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Theme logic
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
-
-  // Streak logic
   const [streak, setStreak] = useState(() => Number(localStorage.getItem('streak')) || 0);
 
-  // Tasks & Daily Reset logic
   const [tasks, setTasks] = useState(() => {
     const todayStr = new Date().toDateString();
     const lastOpened = localStorage.getItem('lastOpenedDate');
     if (lastOpened !== todayStr) {
       localStorage.setItem('lastOpenedDate', todayStr);
-      return []; // Reset on new day
+      return []; 
     }
     const saved = localStorage.getItem('tasks');
     return saved ? JSON.parse(saved) : [];
   });
   const [newTask, setNewTask] = useState('');
 
-  // Persist tasks on change
   useEffect(() => {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem('modes', JSON.stringify(modes));
+    // If not running, immediately reflect mode changes in the timer
+    if (!running) setTime(modes[mode] * 60);
+  }, [modes]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -53,19 +60,13 @@ export default function App() {
     if (rem <= 0) {
       setTime(0); setRunning(false); endRef.current = null;
       
-      // Streak Calculation
       if (mode === 'work') {
         const todayStr = new Date().toDateString();
         const lastWork = localStorage.getItem('lastWorkDate');
-        
         if (lastWork !== todayStr) {
           const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
-          let newStreak = 1; // Default to broken/new streak
-          
-          if (lastWork === yesterdayStr) {
-            newStreak = streak + 1; // Continued streak
-          }
-          
+          let newStreak = 1;
+          if (lastWork === yesterdayStr) newStreak = streak + 1;
           setStreak(newStreak);
           localStorage.setItem('streak', newStreak);
           localStorage.setItem('lastWorkDate', todayStr);
@@ -99,7 +100,6 @@ export default function App() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
-
     if (running) {
       setRunning(false);
       if (endRef.current) setTime(Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000)));
@@ -112,7 +112,7 @@ export default function App() {
 
   const skip = () => {
     const next = CYCLE[(CYCLE.indexOf(mode) + 1) % CYCLE.length];
-    setRunning(false); endRef.current = null; setMode(next); setTime(MODES[next]);
+    setRunning(false); endRef.current = null; setMode(next); setTime(modes[next] * 60);
   };
 
   const addTask = (e) => {
@@ -132,7 +132,6 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)', fontFamily: 'sans-serif', padding: '2rem', boxSizing: 'border-box' }}>
       
-      {/* Theme Toggle */}
       <button onClick={() => setIsDark(!isDark)} style={{ position: 'absolute', top: '20px', right: '20px', padding: '10px', borderRadius: '50%', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', cursor: 'pointer', fontSize: '1.2rem', width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label="Toggle Theme">
         {isDark ? '☀️' : '🌙'}
       </button>
@@ -147,13 +146,31 @@ export default function App() {
         </div>
 
         <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--bg-card)', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
-          <h2 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>{LABELS[mode]}</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ margin: 0, color: 'var(--text-muted)', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>{LABELS[mode]}</h2>
+            <button onClick={() => setShowSettings(!showSettings)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem', filter: isDark ? 'invert(1)' : 'none' }}>⚙️</button>
+          </div>
+          
+          {showSettings && (
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1rem', background: 'var(--bg-input)', padding: '10px', borderRadius: '8px' }}>
+               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Work
+                <input type="number" min="1" value={modes.work} onChange={e => setModes({...modes, work: e.target.value})} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+               </label>
+               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Short
+                <input type="number" min="1" value={modes.shortBreak} onChange={e => setModes({...modes, shortBreak: e.target.value})} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+               </label>
+               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Long
+                <input type="number" min="1" value={modes.longBreak} onChange={e => setModes({...modes, longBreak: e.target.value})} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+               </label>
+            </div>
+          )}
+
           <div style={{ fontSize: '5rem', margin: '1rem 0', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--text-main)' }}>
             {Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '1.5rem' }}>
             <button onClick={toggle} style={btnStyle}>{running ? 'Pause' : 'Start'}</button>
-            <button onClick={() => { setRunning(false); endRef.current = null; setTime(MODES[mode]); }} style={btnStyle}>Reset</button>
+            <button onClick={() => { setRunning(false); endRef.current = null; setTime(modes[mode] * 60); }} style={btnStyle}>Reset</button>
             <button onClick={skip} style={btnStyle}>Skip</button>
           </div>
         </div>
