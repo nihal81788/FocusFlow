@@ -17,11 +17,29 @@ export default function App() {
   const [running, setRunning] = useState(false);
   const endRef = useRef(null);
 
-  const [tasks, setTasks] = useState([]);
-  const [newTask, setNewTask] = useState('');
-
   // Theme logic
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
+
+  // Streak logic
+  const [streak, setStreak] = useState(() => Number(localStorage.getItem('streak')) || 0);
+
+  // Tasks & Daily Reset logic
+  const [tasks, setTasks] = useState(() => {
+    const todayStr = new Date().toDateString();
+    const lastOpened = localStorage.getItem('lastOpenedDate');
+    if (lastOpened !== todayStr) {
+      localStorage.setItem('lastOpenedDate', todayStr);
+      return []; // Reset on new day
+    }
+    const saved = localStorage.getItem('tasks');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newTask, setNewTask] = useState('');
+
+  // Persist tasks on change
+  useEffect(() => {
+    localStorage.setItem('tasks', JSON.stringify(tasks));
+  }, [tasks]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -31,8 +49,28 @@ export default function App() {
   const update = useCallback(() => {
     if (!running || !endRef.current) return;
     const rem = endRef.current - Date.now();
+    
     if (rem <= 0) {
       setTime(0); setRunning(false); endRef.current = null;
+      
+      // Streak Calculation
+      if (mode === 'work') {
+        const todayStr = new Date().toDateString();
+        const lastWork = localStorage.getItem('lastWorkDate');
+        
+        if (lastWork !== todayStr) {
+          const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+          let newStreak = 1; // Default to broken/new streak
+          
+          if (lastWork === yesterdayStr) {
+            newStreak = streak + 1; // Continued streak
+          }
+          
+          setStreak(newStreak);
+          localStorage.setItem('streak', newStreak);
+          localStorage.setItem('lastWorkDate', todayStr);
+        }
+      }
       
       const msg = `${LABELS[mode]} Complete! Time to start your next session.`;
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -43,7 +81,7 @@ export default function App() {
     } else {
       setTime(Math.ceil(rem / 1000));
     }
-  }, [running, mode]);
+  }, [running, mode, streak]);
 
   useEffect(() => {
     if (!running) return;
@@ -58,7 +96,6 @@ export default function App() {
   }, [update]);
 
   const toggle = () => {
-    // Request notification permissions
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -105,6 +142,10 @@ export default function App() {
           <img src="/logo.png" alt="FocusFlow Logo" style={{ width: '40px', height: '40px', filter: isDark ? 'invert(1)' : 'none' }} />
           <h1 style={{ color: 'var(--text-main)', textAlign: 'center', margin: 0 }}>FocusFlow</h1>
         </div>
+        <div style={{ textAlign: 'center', color: '#ff9800', fontWeight: 'bold', fontSize: '1.2rem', marginTop: '-1rem' }}>
+          🔥 {streak} Day Streak
+        </div>
+
         <div style={{ textAlign: 'center', padding: '2rem', background: 'var(--bg-card)', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' }}>
           <h2 style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '1px' }}>{LABELS[mode]}</h2>
           <div style={{ fontSize: '5rem', margin: '1rem 0', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--text-main)' }}>
