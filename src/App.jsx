@@ -74,8 +74,13 @@ export default function App() {
       }
 
       const msg = `${LABELS[mode]} Complete! Time to start your next session.`;
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(msg);
+      console.log("Timer hit 0! Permission is:", Notification.permission);
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification("FocusFlow", { body: msg, icon: '/logo.png' });
+        } else {
+          alert(`TIMER DONE! (Notifications are: ${Notification.permission})`);
+        }
       } else {
         alert(msg);
       }
