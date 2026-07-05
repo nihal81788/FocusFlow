@@ -1,4 +1,4 @@
-# FLOWSTATE
+# FocusFlow
 
 To run this project:
 
