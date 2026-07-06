@@ -55,8 +55,6 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('modes', JSON.stringify(modes));
-    // If not running, immediately reflect mode changes in the timer
-    if (!running) setTime(modes[mode] * 60);
   }, [modes]);
 
   useEffect(() => {
@@ -88,11 +86,12 @@ export default function App() {
       }
 
       const msg = `${LABELS[mode]} Complete! Time to start your next session.`;
+
       if ('Notification' in window) {
         if (Notification.permission === 'granted') {
-          new Notification("FocusFlow", { body: msg, icon: logo });
+          new Notification("FocusFlow", { body: msg, icon: '/logo.png', requireInteraction: true });
         } else if (Notification.permission === 'default') {
-          Notification.requestPermission().then(p => p === 'granted' && new Notification("FocusFlow", { body: msg, icon: logo }));
+          Notification.requestPermission().then(p => p === 'granted' && new Notification("FocusFlow", { body: msg, icon: '/logo.png', requireInteraction: true }));
         } else {
           alert(msg);
         }
@@ -179,13 +178,25 @@ export default function App() {
           {showSettings && (
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1rem', background: 'var(--bg-input)', padding: '10px', borderRadius: '8px' }}>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Work
-                <input type="number" min="1" value={modes.work} onChange={e => setModes({ ...modes, work: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.work} onChange={e => {
+                  const val = Number(e.target.value);
+                  setModes({ ...modes, work: val });
+                  if (!running && mode === 'work' && time > 0) setTime(val * 60);
+                }} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Short
-                <input type="number" min="1" value={modes.shortBreak} onChange={e => setModes({ ...modes, shortBreak: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.shortBreak} onChange={e => {
+                  const val = Number(e.target.value);
+                  setModes({ ...modes, shortBreak: val });
+                  if (!running && mode === 'shortBreak' && time > 0) setTime(val * 60);
+                }} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Long
-                <input type="number" min="1" value={modes.longBreak} onChange={e => setModes({ ...modes, longBreak: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.longBreak} onChange={e => {
+                  const val = Number(e.target.value);
+                  setModes({ ...modes, longBreak: val });
+                  if (!running && mode === 'longBreak' && time > 0) setTime(val * 60);
+                }} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
             </div>
           )}
