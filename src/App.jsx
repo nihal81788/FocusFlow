@@ -1,20 +1,25 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import logo from '/logo.png';
 
 const DEFAULT_MODES = { work: 25, shortBreak: 5, longBreak: 15 };
 const CYCLE = ['work', 'shortBreak', 'longBreak'];
 const LABELS = { work: 'Work Session', shortBreak: 'Short Break', longBreak: 'Long Break' };
 
-const parseMD = (str) => ({
-  __html: str
-    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-    .replace(/\*(.*?)\*/g, '<i>$1</i>')
-    .replace(/^- (.*)$/gm, '<li>$1</li>')
-});
+const renderMD = (str) => {
+  if (str.startsWith('- ')) return <li>{renderMD(str.slice(2))}</li>;
+  return str.split(/(\*\*.*?\*\*|\*.*?\*)/g).map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <b key={i}>{part.slice(2, -2)}</b>;
+    if (part.startsWith('*') && part.endsWith('*')) return <i key={i}>{part.slice(1, -1)}</i>;
+    return <React.Fragment key={i}>{part}</React.Fragment>;
+  });
+};
 
 export default function App() {
   const [modes, setModes] = useState(() => {
     const saved = localStorage.getItem('modes');
-    return saved ? JSON.parse(saved) : DEFAULT_MODES;
+    if (!saved) return DEFAULT_MODES;
+    const parsed = JSON.parse(saved);
+    return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, Number(v)]));
   });
   const [mode, setMode] = useState('work');
   const [time, setTime] = useState(modes.work * 60);
@@ -25,6 +30,12 @@ export default function App() {
 
   const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') !== 'light');
   const [streak, setStreak] = useState(() => Number(localStorage.getItem('streak')) || 0);
+  const streakRef = useRef(streak);
+  const [permError, setPermError] = useState('');
+
+  useEffect(() => {
+    streakRef.current = streak;
+  }, [streak]);
 
   const [tasks, setTasks] = useState(() => {
     const todayStr = new Date().toDateString();
@@ -64,9 +75,12 @@ export default function App() {
         const todayStr = new Date().toDateString();
         const lastWork = localStorage.getItem('lastWorkDate');
         if (lastWork !== todayStr) {
-          const yesterdayStr = new Date(Date.now() - 86400000).toDateString();
+          const yesterday = new Date();
+          yesterday.setHours(0, 0, 0, 0);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toDateString();
           let newStreak = 1;
-          if (lastWork === yesterdayStr) newStreak = streak + 1;
+          if (lastWork === yesterdayStr) newStreak = streakRef.current + 1;
           setStreak(newStreak);
           localStorage.setItem('streak', newStreak);
           localStorage.setItem('lastWorkDate', todayStr);
@@ -74,12 +88,13 @@ export default function App() {
       }
 
       const msg = `${LABELS[mode]} Complete! Time to start your next session.`;
-      console.log("Timer hit 0! Permission is:", Notification.permission);
       if ('Notification' in window) {
         if (Notification.permission === 'granted') {
-          new Notification("FocusFlow", { body: msg, icon: '/logo.png' });
+          new Notification("FocusFlow", { body: msg, icon: logo });
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission().then(p => p === 'granted' && new Notification("FocusFlow", { body: msg, icon: logo }));
         } else {
-          alert(`TIMER DONE! (Notifications are: ${Notification.permission})`);
+          alert(msg);
         }
       } else {
         alert(msg);
@@ -87,7 +102,7 @@ export default function App() {
     } else {
       setTime(Math.ceil(rem / 1000));
     }
-  }, [running, mode, streak]);
+  }, [running, mode]);
 
   useEffect(() => {
     if (!running) return;
@@ -101,10 +116,15 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [update]);
 
-  const toggle = () => {
+  const toggle = async () => {
     if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+      const p = await Notification.requestPermission();
+      if (p === 'denied') {
+        setPermError('Notifications denied. Timer will not start.');
+        return;
+      }
     }
+    setPermError('');
     if (running) {
       setRunning(false);
       if (endRef.current) setTime(Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000)));
@@ -159,13 +179,13 @@ export default function App() {
           {showSettings && (
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '1rem', background: 'var(--bg-input)', padding: '10px', borderRadius: '8px' }}>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Work
-                <input type="number" min="1" value={modes.work} onChange={e => setModes({ ...modes, work: e.target.value })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.work} onChange={e => setModes({ ...modes, work: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Short
-                <input type="number" min="1" value={modes.shortBreak} onChange={e => setModes({ ...modes, shortBreak: e.target.value })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.shortBreak} onChange={e => setModes({ ...modes, shortBreak: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
               <label style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>Long
-                <input type="number" min="1" value={modes.longBreak} onChange={e => setModes({ ...modes, longBreak: e.target.value })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                <input type="number" min="1" value={modes.longBreak} onChange={e => setModes({ ...modes, longBreak: Number(e.target.value) })} style={{ width: '40px', padding: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
               </label>
             </div>
           )}
@@ -173,6 +193,7 @@ export default function App() {
           <div style={{ fontSize: '5rem', margin: '1rem 0', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--text-main)' }}>
             {Math.floor(time / 60).toString().padStart(2, '0')}:{(time % 60).toString().padStart(2, '0')}
           </div>
+          {permError && <div style={{ color: '#ff5555', fontSize: '0.9rem', marginBottom: '1rem' }}>{permError}</div>}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '1.5rem' }}>
             <button onClick={toggle} style={btnStyle}>{running ? 'Pause' : 'Start'}</button>
             <button onClick={() => { setRunning(false); endRef.current = null; setTime(modes[mode] * 60); }} style={btnStyle}>Reset</button>
@@ -215,7 +236,7 @@ export default function App() {
                     style={{ width: '100%', padding: '4px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-main)', boxSizing: 'border-box' }}
                   />
                 ) : (
-                  <span dangerouslySetInnerHTML={parseMD(t.text)} onDoubleClick={() => toggleEdit(t.id)} style={{ cursor: 'pointer', display: 'block', margin: 0 }} title="Double-click to edit" />
+                  <span onDoubleClick={() => toggleEdit(t.id)} style={{ cursor: 'pointer', display: 'block', margin: 0 }} title="Double-click to edit">{renderMD(t.text)}</span>
                 )}
               </div>
 
